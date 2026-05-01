@@ -777,6 +777,13 @@ def boolify(value) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def db_bool(value) -> bool | int:
+    normalized = bool(value)
+    if ACTIVE_DB_BACKEND == "postgres":
+        return normalized
+    return 1 if normalized else 0
+
+
 def advisory_frequency_interval(frequency: str | None) -> timedelta:
     normalized = (frequency or "weekly").strip().lower()
     if normalized == "instant":
@@ -1308,8 +1315,8 @@ def get_or_create_advisory_preferences(
                 """,
                 (
                     user_id,
-                    1 if defaults["email_alerts_enabled"] else 0,
-                    1 if defaults["in_app_alerts_enabled"] else 0,
+                    db_bool(defaults["email_alerts_enabled"]),
+                    db_bool(defaults["in_app_alerts_enabled"]),
                     defaults["favorite_crop"],
                     defaults["preferred_region"],
                     defaults["preferred_season"],
@@ -1352,8 +1359,8 @@ def update_advisory_preferences(user_id: int, payload: dict[str, object], state:
                 WHERE user_id = %s
                 """,
                 (
-                    1 if updated["email_alerts_enabled"] else 0,
-                    1 if updated["in_app_alerts_enabled"] else 0,
+                    db_bool(updated["email_alerts_enabled"]),
+                    db_bool(updated["in_app_alerts_enabled"]),
                     updated["favorite_crop"],
                     updated["preferred_region"],
                     updated["preferred_season"],
@@ -1730,9 +1737,9 @@ def insert_notifications(user_id: int, advisories: list[dict[str, object]], pref
                         advisory.get("confidence_score"),
                         advisory.get("confidence_label"),
                         advisory.get("expected_impact_pct"),
-                        0 if severity_rank(advisory.get("priority")) >= 1 else 1,
-                        1 if preferences.get("in_app_alerts_enabled") else 0,
-                        0,
+                        db_bool(severity_rank(advisory.get("priority")) < 1),
+                        db_bool(preferences.get("in_app_alerts_enabled")),
+                        db_bool(False),
                         "pending" if preferences.get("email_alerts_enabled") and severity_rank(advisory.get("priority")) >= 1 else "disabled",
                     ),
                 )
@@ -1945,10 +1952,10 @@ def list_user_notifications(
                 WHERE user_id = %s
                   AND in_app_visible = %s
             """
-            params: list[object] = [user_id, 1]
+            params: list[object] = [user_id, db_bool(True)]
             if not include_read:
                 query += " AND is_read = %s"
-                params.append(0)
+                params.append(db_bool(False))
             if category and category != "all":
                 query += " AND category = %s"
                 params.append(category)
@@ -1990,7 +1997,7 @@ def get_unread_notification_count(user_id: int) -> int:
                   AND in_app_visible = %s
                   AND is_read = %s
                 """,
-                (user_id, 1, 0),
+                (user_id, db_bool(True), db_bool(False)),
             )
             row = row_to_dict(cursor.fetchone()) or {}
     finally:
@@ -2031,7 +2038,7 @@ def get_priority_popup_notification(user_id: int) -> dict[str, object] | None:
                 ORDER BY CASE WHEN priority = 'critical' THEN 0 ELSE 1 END, created_at DESC, id DESC
                 LIMIT 1
                 """,
-                (user_id, 1, 0, 0, "critical", "important"),
+                (user_id, db_bool(True), db_bool(False), db_bool(False), "critical", "important"),
             )
             row = row_to_dict(cursor.fetchone())
     finally:
@@ -2060,7 +2067,7 @@ def mark_notification_as_read(user_id: int, notification_id: int, dismiss_popup:
                 WHERE id = %s
                   AND user_id = %s
                 """,
-                (1, datetime.utcnow().isoformat(), 1 if dismiss_popup else 0, notification_id, user_id),
+                (db_bool(True), datetime.utcnow().isoformat(), db_bool(dismiss_popup), notification_id, user_id),
             )
             updated = cursor.rowcount
         connection.commit()
@@ -2081,7 +2088,7 @@ def dismiss_notification_popup(user_id: int, notification_id: int) -> bool:
                 WHERE id = %s
                   AND user_id = %s
                 """,
-                (1, notification_id, user_id),
+                (db_bool(True), notification_id, user_id),
             )
             updated = cursor.rowcount
         connection.commit()
