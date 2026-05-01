@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Details</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <script>
+    if (localStorage.getItem("cropAppTheme") === "dark") {
+      document.body.classList.add("dark-mode");
+    }
+  </script>
+  <div class="page-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Project Team</p>
+        <h1>Contact Details</h1>
+      </div>
+      <div class="header-actions">
+        <a class="button secondary" href="{{ url_for('index') }}">Back to Website</a>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Team Contacts</p>
+          <h2>Reach the project contributors</h2>
+        </div>
+      </div>
+      <div class="contact-grid">
+        {% for person in contacts %}
+        <article class="contact-card">
+          <p class="eyebrow">{{ person.role }}</p>
+          <h3>{{ person.name }}</h3>
+          <p><strong>Email:</strong> {{ person.email }}</p>
+          <p><strong>Phone:</strong> {{ person.phone }}</p>
+          <p><strong>Address:</strong> {{ person.address }}</p>
+          <p><strong>Institution:</strong> {{ person.institution }}</p>
+          <p><strong>Program:</strong> {{ person.program }}</p>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</body>
+</html>

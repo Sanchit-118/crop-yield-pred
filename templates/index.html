@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crop Yield Prediction System</title>
+  <meta
+    name="description"
+    content="A working crop yield prediction website with backend model training, risk scoring, visual analytics, and dataset-driven predictions."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="floating-user-menu">
+    <button type="button" id="user-menu-toggle" class="floating-user-toggle" aria-label="Open user menu">
+      {{ current_user.full_name[:1] if current_user.full_name else 'U' }}
+    </button>
+    <div id="user-menu-dropdown" class="floating-user-dropdown">
+      <div class="floating-user-profile">
+        <div class="floating-user-avatar">{{ current_user.full_name[:1] if current_user.full_name else 'U' }}</div>
+        <div class="floating-user-copy">
+          <strong>{{ current_user.full_name }}</strong>
+          <span class="floating-user-email">{{ current_user.email }}</span>
+        </div>
+      </div>
+      <div class="floating-user-section">
+        <span class="floating-user-label">Quick Access</span>
+        <a href="{{ url_for('advisory_center') }}" class="floating-user-link">
+          <span class="floating-user-link-icon">Alerts</span>
+          <span>Crop Advisory Center</span>
+        </a>
+        <a href="#history" class="floating-user-link">
+          <span class="floating-user-link-icon">History</span>
+          <span>Prediction History</span>
+        </a>
+      </div>
+      <div class="floating-user-section">
+        <a href="{{ url_for('logout') }}" class="floating-user-link is-logout" data-i18n="logout">
+          <span class="floating-user-link-icon">Exit</span>
+          <span>Logout</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <header class="site-header">
+      <div class="header-intro-copy">
+        <h1 data-i18n="title_main">Crop Yield Prediction System</h1>
+      </div>
+      <div class="header-actions">
+        <div class="header-utility-cluster">
+          <button type="button" id="advisory-toggle" class="header-utility-button" aria-label="Open crop advisories">
+            <span class="header-utility-icon">Alerts</span>
+            <span>Crop Advisory</span>
+            <span id="advisory-badge" class="notification-badge{% if not advisory_unread_count %} is-hidden{% endif %}">{{ advisory_unread_count or 0 }}</span>
+          </button>
+          <div id="advisory-popover" class="advisory-popover">
+            <div class="advisory-popover-head">
+              <div>
+                <p class="eyebrow">Advisory Feed</p>
+                <h3>Latest crop signals</h3>
+              </div>
+              <a href="{{ url_for('advisory_center') }}" class="mini-link">Open center</a>
+            </div>
+          <div id="advisory-popover-list" class="advisory-popover-list">
+            {% for advisory in advisory_notifications[:2] %}
+              <article class="advisory-popover-item{% if not advisory.is_read %} is-unread{% endif %}">
+                <span class="notification-priority {{ advisory.priority }}">{{ advisory.priority_label }}</span>
+                <strong>{{ advisory.icon }} {{ advisory.compact_title }}</strong>
+                <p>👉 {{ advisory.compact_action }}</p>
+              </article>
+              {% else %}
+              <div class="history-empty">Your advisory feed will appear here after refresh.</div>
+              {% endfor %}
+            </div>
+            <div class="advisory-popover-actions">
+              <a
+                id="advisory-popover-more"
+                href="{{ url_for('advisory_center') }}"
+                class="mini-link{% if advisory_notifications|length <= 2 %} is-hidden{% endif %}"
+              >Show More</a>
+            </div>
+          </div>
+        </div>
+        <div class="header-utility-cluster">
+          <button type="button" id="model-guide-toggle" class="header-utility-button" aria-label="Open model guide">
+            <span class="header-utility-icon">Guide</span>
+            <span>Model Guide</span>
+          </button>
+        </div>
+        <div class="header-controls">
+          <label class="header-control-group">
+            <span data-i18n="language">Language</span>
+            <select id="language-select" class="header-select">
+              <option value="en">English</option>
+              <option value="hi">हिंदी</option>
+              <option value="hinglish">Hinglish</option>
+            </select>
+          </label>
+          <label class="header-control-group">
+            <span data-i18n="theme">Theme</span>
+            <select id="theme-select" class="header-select">
+              <option value="light" data-i18n="light_mode">Light Mode</option>
+              <option value="dark" data-i18n="dark_mode">Dark Mode</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero-grid">
+      <article class="hero-card accent">
+        <p class="eyebrow" data-i18n="project_goal">Project Goal</p>
+        <h2 data-i18n="hero_heading">Predict crop yield from environmental and soil conditions.</h2>
+        <p data-i18n="hero_text">
+          This application trains regression models on a dataset, compares model
+          performance, predicts yield from user input, and classifies overall
+          agricultural risk using a weighted scoring method.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#predictor" data-i18n="try_predictor">Try Live Predictor</a>
+        </div>
+      </article>
+
+      <article class="hero-card stats">
+        <div class="snapshot-header">
+          <p class="eyebrow">System Snapshot</p>
+          <h3>Built for live prediction, model comparison, and explainable crop decisions.</h3>
+        </div>
+        <div class="snapshot-badges">
+          <span>Live prediction ready</span>
+          <span>Season-aware input flow</span>
+          <span>Fuzzy risk evaluation</span>
+        </div>
+        <div class="snapshot-feature-grid">
+          <div class="snapshot-feature-card is-primary">
+            <span>Best Model Selected</span>
+            <strong>{{ summary.best_model }}</strong>
+            <p>Top live prediction engine with R2 {{ summary.best_r2 }} on the current training dataset.</p>
+          </div>
+        </div>
+        <div class="snapshot-mini-grid">
+          <div class="snapshot-mini-card">
+            <span data-i18n="dataset_rows">Dataset Rows</span>
+            <strong>{{ summary.dataset_rows }}</strong>
+          </div>
+          <div class="snapshot-mini-card">
+            <span data-i18n="crops_covered">Crops Covered</span>
+            <strong>{{ summary.crop_count }}</strong>
+          </div>
+          <div class="snapshot-mini-card">
+            <span>Risk Engine</span>
+            <strong>Fuzzy Logic</strong>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow" data-i18n="model_evaluation">Model Evaluation</p>
+          <h2 data-i18n="trained_compared">Trained and compared on the dataset</h2>
+          <p class="dataset-purpose">Multiple models are evaluated, and the strongest one is promoted to live prediction automatically.</p>
+          <div class="model-insight-banner">
+            Live prediction is driven by the model with the best balance of accuracy, confidence stability, and lower error.
+          </div>
+          <div class="model-explainer-row">
+            <span class="model-hint-pill">RMSE, MAE: Lower is better</span>
+            <span class="model-hint-pill">R2: Higher is better</span>
+            <span class="model-hint-pill is-active">Live prediction model : {{ summary.best_model }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="model-section-label">Predictive Models</div>
+      <div class="metrics-grid">
+        {% for result in model_results %}
+        {% set confidence_pct = (result.r2 * 100) | round(1) %}
+        {% set medal = "🏆 Best Model" if result.rank == 1 else ("🥈 Ranked #2" if result.rank == 2 else ("🥉 Ranked #3" if result.rank == 3 else ("#%s Model" % result.rank))) %}
+        <article class="metric-card {% if result.name == summary.best_model %}is-best{% else %}is-muted{% endif %} {% if result.name == 'GA-Optimized ANN' %}is-optimized{% endif %}">
+          <div class="model-card-top">
+            <span class="model-rank-badge {% if result.rank == 1 %}is-best{% endif %}">{{ medal }}</span>
+            {% if result.name == summary.best_model %}
+            <span class="model-choice-pill">Selected for live prediction</span>
+            {% elif result.name == 'GA-Optimized ANN' %}
+            <span class="model-choice-pill is-optimized">Optimized Model (GA + ANN)</span>
+            {% endif %}
+          </div>
+          <h3>{{ result.name }}</h3>
+          {% if result.name == summary.best_model %}
+          <p><strong>Why selected:</strong> {{ result.selection_reason }}</p>
+          {% else %}
+          <p><strong>Why not selected:</strong> {{ result.selection_reason }}</p>
+          {% endif %}
+          <div class="model-confidence-block">
+            <div class="model-confidence-head">
+              <span>Confidence</span>
+              <strong>{{ confidence_pct }}%</strong>
+            </div>
+            <div class="model-confidence-track" aria-hidden="true">
+              <span
+                class="model-confidence-fill {% if result.name == summary.best_model %}is-best{% endif %}"
+                style="width: {{ confidence_pct }}%;"
+              ></span>
+            </div>
+          </div>
+          <div class="metric-pills">
+            <span title="Coefficient of determination. Higher is better.">R2 {{ result.r2 }}</span>
+            <span title="Root mean square error. Lower is better.">RMSE {{ result.rmse }}</span>
+            <span title="Mean absolute error. Lower is better.">MAE {{ result.mae }}</span>
+          </div>
+        </article>
+        {% endfor %}
+        {#
+        <article class="metric-card is-engine">
+          <div class="model-card-top">
+            <span class="model-rank-badge">🌫️ Risk Engine</span>
+            <span class="model-choice-pill is-engine">Interpretation Engine</span>
+          </div>
+          <h3>{{ fuzzy_engine.name }}</h3>
+          <p><strong>Role:</strong> {{ fuzzy_engine.role }}</p>
+          <div class="metric-pills">
+            <span>Low / Moderate / High risk</span>
+            <span>Rainfall + Temp + Soil + Pest</span>
+          </div>
+          <p><strong>Why separate:</strong> Fuzzy logic handles uncertainty and converts continuous inputs into human-understandable risk categories.</p>
+          <p><strong>Why included:</strong> {{ fuzzy_engine.reason }}</p>
+        </article>
+        #}
+      </div>
+      <details class="collapsible-panel is-soft model-insights-panel">
+        <summary>
+          <div>
+            <p class="eyebrow">Model Notes</p>
+            <h3>Quick performance notes</h3>
+          </div>
+        </summary>
+        <div class="model-note-grid">
+          <article class="model-note-card">
+            <p class="eyebrow">Performance Insight</p>
+            <p>{{ comparison_insight }}</p>
+            <p>{{ ann_note }}</p>
+          </article>
+          <article class="model-note-card">
+            <p class="eyebrow">Understanding Metrics</p>
+            <p>{{ metric_meaning }}</p>
+            <p>{{ confidence_note }}</p>
+          </article>
+        </div>
+      </details>
+      <div class="graph-readability-note">
+        Lower RMSE and MAE are better. Higher R2 is better.
+      </div>
+      <div class="chart-shell">
+        {{ figures.comparison|safe }}
+      </div>
+    </section>
+
+    <section class="panel prediction-workspace-panel" id="predictor">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow" data-i18n="live_prediction">Live Prediction</p>
+          <h2 data-i18n="prediction_subtitle">Use Simple Mode for quick prediction or Advanced Mode for expert analysis</h2>
+        </div>
+        <div class="formula-chip" data-i18n="risk_formula">Risk Score = Sum(Weight * Factor Score)</div>
+      </div>
+
+      <div class="predictor-layout">
+        <form id="prediction-form" class="form-card">
+          <div class="mode-switch" role="tablist" aria-label="Prediction mode">
+            <button type="button" class="mode-button is-active" data-mode="simple" data-i18n="simple_mode">Simple Mode</button>
+            <button type="button" class="mode-button" data-mode="advanced" data-i18n="advanced_mode">Advanced Mode</button>
+          </div>
+
+              <div id="simple-mode" class="mode-panel is-active">
+                <div class="simple-intro">
+                  <h3 data-i18n="farmer_friendly">Farmer-friendly input</h3>
+                  <p data-i18n="simple_intro">Choose location, season, crop, and current field conditions. The system will fill the technical profile automatically.</p>
+                  <div class="mode-info-actions">
+                    <button type="button" class="button secondary info-toggle-button" data-info-key="yield-unit">Yield Unit</button>
+                  </div>
+                </div>
+
+              <div id="simple-climate-profile" class="simple-climate-profile"></div>
+
+                <div class="form-grid">
+                  <div class="form-subsection full-width">
+                    <span class="form-subtitle">Agro-Climate Profile</span>
+                    <p>Choose the region and season first.</p>
+                  </div>
+                <label>
+                  <span data-i18n="country">Country</span>
+                  <select id="simple-country">
+                  {% for country in location_profiles.keys() %}
+                  <option value="{{ country }}">{{ country }}</option>
+                  {% endfor %}
+                </select>
+                </label>
+
+                <label>
+                  <span>Region</span>
+                  <select id="simple-direction">
+                    <option value="North" data-i18n="north">North</option>
+                    <option value="South" selected data-i18n="south">South</option>
+                    <option value="East" data-i18n="east">East</option>
+                  <option value="West" data-i18n="west">West</option>
+                </select>
+              </label>
+
+              <label>
+                <span data-i18n="season">Season</span>
+                <select id="simple-season">
+                  <option value="Kharif">Kharif</option>
+                  <option value="Rabi">Rabi</option>
+                  <option value="Zaid">Zaid</option>
+                </select>
+              </label>
+
+                <label>
+                  <span data-i18n="crop">Crop</span>
+                  <select id="simple-crop">
+                    {% for crop in options.crop_types %}
+                    <option value="{{ crop }}">{{ crop }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+
+                  <div class="form-subsection full-width">
+                    <span class="form-subtitle">Field Condition Snapshot</span>
+                    <p>Set water, nutrient, and pest conditions in simple terms.</p>
+                  </div>
+                <label>
+                  <span data-i18n="rain_situation">Rain Situation</span>
+                  <select id="simple-rain">
+                    <option value="normal" data-i18n="normal">Normal</option>
+                  <option value="low" data-i18n="low_rain">Low Rain</option>
+                  <option value="high" data-i18n="heavy_rain">Heavy Rain</option>
+                </select>
+              </label>
+
+              <label>
+                <span data-i18n="fertilizer_level">Fertilizer Level</span>
+                <select id="simple-fertilizer">
+                  <option value="medium" data-i18n="balanced">Balanced</option>
+                  <option value="low" data-i18n="low">Low</option>
+                  <option value="high" data-i18n="high">High</option>
+                </select>
+              </label>
+
+              <label>
+                <span data-i18n="pest_situation">Pest Situation</span>
+                <select id="simple-pest">
+                  <option value="low" data-i18n="low">Low</option>
+                  <option value="medium" data-i18n="medium">Medium</option>
+                  <option value="high" data-i18n="high">High</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="simple-preview">
+              <p class="eyebrow" data-i18n="autofilled_profile">Auto-filled Technical Profile</p>
+              <div id="simple-preview-card" class="simple-preview-card"></div>
+            </div>
+            </div>
+
+            <div id="advanced-mode" class="mode-panel">
+              <div class="form-grid">
+                <div class="form-subsection full-width">
+                  <span class="form-subtitle">Advanced Research Input</span>
+                  <p>Use manual scientific values for expert-level testing.</p>
+                </div>
+
+                  <div class="full-width">
+                    <div class="mode-info-actions">
+                      <button type="button" class="button secondary info-toggle-button" data-info-key="why-advanced">Why Advanced Mode?</button>
+                      <button type="button" class="button secondary info-toggle-button" data-info-key="yield-unit">Yield Unit</button>
+                    </div>
+                  </div>
+
+                <div class="form-subsection full-width">
+                  <span class="form-subtitle">Crop and Location</span>
+                  <p>Start with crop, region, season, and soil.</p>
+                </div>
+
+                <label>
+                  <span data-i18n="crop_type">Crop Type</span>
+                  <select name="crop_type">
+                    {% for crop in options.crop_types %}
+                  <option value="{{ crop }}">{{ crop }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+
+                <label>
+                  <span data-i18n="region">Region</span>
+                <select name="region">
+                    {% for region in options.regions %}
+                    <option value="{{ region }}">{{ region }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+
+                <label>
+                  <span data-i18n="season">Season</span>
+                  <select name="season">
+                    <option value="Kharif">Kharif</option>
+                    <option value="Rabi">Rabi</option>
+                    <option value="Zaid">Zaid</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span data-i18n="soil_type">Soil Type</span>
+                  <select name="soil_type">
+                    {% for soil in options.soil_types %}
+                    <option value="{{ soil }}">{{ soil }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+
+                <div class="full-width">
+                  <p class="help-text compact-help">Season influences stress and suitability interpretation.</p>
+                </div>
+
+                <div class="form-subsection full-width">
+                  <span class="form-subtitle">Climate Conditions</span>
+                  <p>Enter rainfall, temperature, and humidity.</p>
+                </div>
+
+                <label>
+                  <span data-i18n="rainfall_mm">Rainfall (mm)</span>
+                  <span class="input-tip">How much rain the field received in millimetres.</span>
+                  <input type="number" step="0.1" name="rainfall_mm" value="850">
+              </label>
+
+              <label>
+                <span data-i18n="temperature_c">Temperature (C)</span>
+                <span class="input-tip">Approximate daytime field temperature in Celsius.</span>
+                <input type="number" step="0.1" name="temperature_c" value="27">
+              </label>
+
+                <label>
+                  <span data-i18n="humidity_pct">Humidity (%)</span>
+                  <span class="input-tip">Moisture level in the surrounding air.</span>
+                  <input type="number" step="0.1" name="humidity_pct" value="72">
+                </label>
+
+                <div class="form-subsection full-width">
+                  <span class="form-subtitle">Soil and Nutrients</span>
+                  <p>Enter soil pH and nutrient values.</p>
+                </div>
+
+                <label>
+                  <span data-i18n="soil_ph">Soil pH</span>
+                  <span class="input-tip">Acidity or alkalinity of the soil. Neutral is around 7.</span>
+                  <input type="number" step="0.1" name="soil_ph" value="6.4">
+              </label>
+
+              <label>
+                <span data-i18n="nitrogen">Nitrogen (kg/ha)</span>
+                <span class="input-tip">Available nitrogen in the field or planned nutrient level.</span>
+                <input type="number" step="0.1" name="nitrogen_kg_ha" value="96">
+              </label>
+
+              <label>
+                <span data-i18n="phosphorus">Phosphorus (kg/ha)</span>
+                <span class="input-tip">Phosphorus support for root growth and crop development.</span>
+                <input type="number" step="0.1" name="phosphorus_kg_ha" value="54">
+              </label>
+
+                <label>
+                  <span data-i18n="potassium">Potassium (kg/ha)</span>
+                  <span class="input-tip">Potassium support for crop strength and water balance.</span>
+                  <input type="number" step="0.1" name="potassium_kg_ha" value="67">
+                </label>
+
+                <div class="form-subsection full-width">
+                  <span class="form-subtitle">Pest Pressure</span>
+                  <p>Use a 0 to 10 score for pest severity.</p>
+                </div>
+
+                <label>
+                  <span data-i18n="pest_risk">Pest Risk (0-10)</span>
+                  <span class="input-tip">0 means almost no pressure, 10 means severe pest pressure.</span>
+                  <input type="number" step="0.1" min="0" max="10" name="pest_risk" value="3.5">
+              </label>
+            </div>
+          </div>
+
+          <div id="validation-box" class="validation-box"></div>
+
+          <div class="form-actions">
+            <button type="submit" class="button primary" data-i18n="predict_yield">Predict Yield</button>
+            <button type="button" id="recommend-crop" class="button secondary" data-i18n="recommend_best_crop">Recommend Best Crop</button>
+            <button type="button" id="fill-example" class="button secondary" data-i18n="load_example">Load Example</button>
+            <button type="button" id="reset-form" class="button secondary">Clear and Start New Prediction</button>
+          </div>
+        </form>
+
+        <aside class="result-card">
+          <p class="eyebrow" data-i18n="prediction_output">Prediction Output</p>
+          <div id="result" class="result-panel">
+            <div class="result-placeholder" data-i18n="result_placeholder">
+              Submit the form to calculate yield potential and risk.
+            </div>
+          </div>
+          <div class="export-actions">
+            <button type="button" id="download-report" class="button secondary">Download Report (PDF Friendly)</button>
+            <button type="button" id="save-chart-image" class="button secondary">Save Trend Chart Image</button>
+          </div>
+        </aside>
+      </div>
+
+      </section>
+
+      <section id="workflow-review" class="panel workflow-review-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Decision Trail</p>
+            <h2>Scenario comparison and recent predictions</h2>
+            <p class="dataset-purpose">Review how the improved plan changes outcomes and track the latest prediction history in one place.</p>
+          </div>
+        </div>
+        <div class="workflow-review-grid">
+          <div class="compare-panel">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Scenario Lab</p>
+                <h3>Compare Two Scenarios</h3>
+              </div>
+            </div>
+            <div class="compare-grid">
+              <article class="compare-card">
+                <p class="eyebrow">Current</p>
+                <div id="compare-current" class="compare-placeholder">Run a prediction to capture the current scenario.</div>
+              </article>
+              <article class="compare-card">
+                <p class="eyebrow">Improved</p>
+                <div id="compare-improved" class="compare-placeholder">Use the compare button after prediction to test a better scenario.</div>
+              </article>
+            </div>
+            <div class="compare-actions">
+              <button type="button" id="compare-scenarios" class="button secondary">Compare Current vs Improved</button>
+            </div>
+          </div>
+
+          <div class="history-panel-inline">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow" data-i18n="prediction_history">Prediction History</p>
+                <h3 data-i18n="recent_predictions">Your recent prediction results</h3>
+              </div>
+            </div>
+            <div class="history-headings">
+              <span>Crop</span>
+              <span>Yield Prediction</span>
+              <span>Risk</span>
+            </div>
+            <div id="history" class="history-list">
+              <div class="history-empty" data-i18n="history_empty">Your prediction history will appear here.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {#
+      <section id="advisory-center" class="panel advisory-center-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">AI Farming Assistant</p>
+            <h2>Clear action first, details only when needed</h2>
+            <p class="dataset-purpose">This dashboard is built to tell the user what to do quickly, then explain why only if they want to go deeper.</p>
+          </div>
+        </div>
+        <div class="advisory-center-grid">
+          <div class="advisory-inbox-panel">
+              <div id="advisory-decision-hero" class="advisory-decision-hero">
+                <div class="decision-hero-topline">
+                  <div class="guide-pill">🚀 Best Action Today</div>
+                  <span class="decision-hero-tag">Action first</span>
+                </div>
+                <h3 id="decision-hero-title">🚀 {{ primary_recommendation.title }}</h3>
+                <p id="decision-hero-subtitle" class="dataset-purpose">👉 {{ primary_recommendation.reason }}</p>
+                <div id="decision-hero-metrics" class="decision-hero-metrics">
+                  <span>📍 {{ primary_recommendation.region }}</span>
+                  <span>📈 Yield {{ primary_recommendation.yield }} t/ha</span>
+                  <span>⚠️ {{ primary_recommendation.risk_level }} risk</span>
+                  <span>📊 {{ primary_recommendation.confidence_bar }}</span>
+                </div>
+                <div class="notification-actions">
+                  <button type="button" id="decision-hero-details" class="button primary">View Why</button>
+                <a id="decision-hero-compare" href="#workflow-review" class="button secondary">Compare Crops</a>
+              </div>
+            </div>
+
+            <div class="advisory-panel-head">
+              <div>
+                <p class="eyebrow">Quick Alerts</p>
+                <h3>Action cards only</h3>
+              </div>
+              <div class="advisory-toolbar">
+                <span id="advisory-status-pill" class="guide-pill secondary">
+                  {% if smtp_ready %}Email delivery ready{% else %}In-app only until SMTP is configured{% endif %}
+                </span>
+                <button type="button" id="refresh-advisories" class="button secondary">Refresh advisories</button>
+              </div>
+            </div>
+            <div class="advisory-filter-row compact">
+              <label>
+                <span>Category</span>
+                <select id="advisory-category-filter">
+                  <option value="all">All</option>
+                  <option value="opportunity">Opportunity</option>
+                  <option value="risk">Risk</option>
+                  <option value="watch">Watch</option>
+                </select>
+              </label>
+              <label>
+                <span>Priority</span>
+                <select id="advisory-severity-filter">
+                  <option value="all">All</option>
+                  <option value="critical">Action Needed</option>
+                  <option value="important">Watch</option>
+                  <option value="info">Opportunity</option>
+                </select>
+              </label>
+            </div>
+            <div id="notification-list" class="notification-list">
+              {% for advisory in advisory_notifications[:4] %}
+              <article class="notification-card compact {{ advisory.ui_tone }} {{ advisory.priority }}{% if not advisory.is_read %} is-unread{% endif %}" data-notification-id="{{ advisory.id }}">
+                <div class="notification-card-head">
+                  <span class="notification-priority {{ advisory.priority }}">{{ advisory.priority_label }}</span>
+                  <span class="notification-time">{{ advisory.region_label }}</span>
+                </div>
+                <h4>{{ advisory.icon }} {{ advisory.compact_title }}</h4>
+                <p>👉 {{ advisory.compact_action }}</p>
+                <div class="notification-actions">
+                  {% if advisory.cta_href %}
+                  <a href="{{ advisory.cta_href }}" class="button secondary">Compare Crops</a>
+                  {% endif %}
+                  <button type="button" class="button secondary notification-expand-button" data-notification-expand="{{ advisory.id }}" aria-expanded="false">View details</button>
+                  {% if not advisory.is_read %}
+                  <button type="button" class="button secondary notification-read-button" data-notification-read="{{ advisory.id }}">Mark done</button>
+                  {% endif %}
+                </div>
+                <div class="notification-detail is-hidden" data-notification-detail="{{ advisory.id }}">
+                  <p><strong>Reason:</strong> {{ advisory.message }}</p>
+                  {% if advisory.best_yield or advisory.watch_risk is not none or advisory.confidence_score %}
+                  <div class="notification-meta-grid">
+                    {% if advisory.best_yield %}
+                    <span>📈 Yield: {{ advisory.best_yield }} t/ha</span>
+                    {% endif %}
+                    {% if advisory.watch_risk is not none %}
+                    <span>⚠️ Risk: {{ advisory.watch_risk }}</span>
+                    {% endif %}
+                    {% if advisory.confidence_score %}
+                    <span>📊 Confidence: {{ advisory.confidence_bar }}</span>
+                    {% endif %}
+                    {% if advisory.expected_impact_pct %}
+                    <span>📈 Impact: {{ advisory.expected_impact_pct }}%</span>
+                    {% endif %}
+                  </div>
+                  {% endif %}
+                  <div class="notification-recommendation"><strong>Recommendation:</strong> {{ advisory.recommendation or advisory.compact_action }}</div>
+                  {% if advisory.action_items %}
+                  <ul class="notification-action-list">
+                    {% for item in advisory.action_items %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                  </ul>
+                  {% endif %}
+                </div>
+              </article>
+              {% else %}
+              <div class="history-empty">No advisories yet. Use refresh to generate the first advisory set from your current data.</div>
+              {% endfor %}
+            </div>
+            <div class="notification-actions show-more-row">
+              <button type="button" id="toggle-alerts-view" class="button secondary{% if advisory_notifications|length <= 4 %} is-hidden{% endif %}">Show More</button>
+            </div>
+          </div>
+
+          <div class="advisory-settings-panel">
+            <div class="advisory-settings-card">
+              <div class="advisory-tab-row">
+                <button type="button" class="advisory-tab-button is-active" data-advisory-tab="preferences">Preferences</button>
+                <button type="button" class="advisory-tab-button" data-advisory-tab="email">Email Desk</button>
+              </div>
+
+              <div class="advisory-tab-panel is-active" data-advisory-panel="preferences">
+                <div class="section-heading compact">
+                  <div>
+                    <p class="eyebrow">Preferences</p>
+                    <h3>Choose what matters most</h3>
+                  </div>
+                </div>
+                <form id="advisory-preferences-form" class="advisory-form">
+                  <label>
+                    <span>Favorite Crop</span>
+                    <select name="favorite_crop">
+                      {% for crop in options.crop_types %}
+                      <option value="{{ crop }}" {% if advisory_preferences.favorite_crop == crop %}selected{% endif %}>{{ crop }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Preferred Region</span>
+                    <select name="preferred_region">
+                      {% for region in options.regions %}
+                      <option value="{{ region }}" {% if advisory_preferences.preferred_region == region %}selected{% endif %}>{{ region }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Preferred Season</span>
+                    <select name="preferred_season">
+                      {% for season in ['Kharif', 'Rabi', 'Zaid'] %}
+                      <option value="{{ season }}" {% if advisory_preferences.preferred_season == season %}selected{% endif %}>{{ season }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Alert Frequency</span>
+                    <select name="alert_frequency">
+                      <option value="instant" {% if advisory_preferences.alert_frequency == 'instant' %}selected{% endif %}>Instant</option>
+                      <option value="daily" {% if advisory_preferences.alert_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                      <option value="weekly" {% if advisory_preferences.alert_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
+                    </select>
+                  </label>
+                  <label class="advisory-check">
+                    <input type="checkbox" name="in_app_alerts_enabled" value="1" {% if advisory_preferences.in_app_alerts_enabled %}checked{% endif %}>
+                    <span>Show advisory alerts inside my dashboard.</span>
+                  </label>
+                  <div class="notification-actions">
+                    <button type="submit" class="button primary">Save advisory preferences</button>
+                  </div>
+                </form>
+                <div id="advisory-settings-feedback" class="dataset-status" aria-live="polite"></div>
+              </div>
+
+              <div class="advisory-tab-panel" data-advisory-panel="email">
+                <div class="section-heading compact">
+                  <div>
+                    <p class="eyebrow">Email Desk</p>
+                    <h3>Send updates to your inbox</h3>
+                  </div>
+                </div>
+                <div class="email-desk-card">
+                  <span class="guide-pill secondary" id="email-desk-status">{% if smtp_status.ready %}Email ready{% else %}Email not configured{% endif %}</span>
+                  <h4>{{ current_user.email }}</h4>
+                  <p class="dataset-purpose">Use this tab to control email delivery and send the latest smart alert to your registered inbox.</p>
+                  {% if not smtp_status.ready %}
+                  <p class="dataset-purpose email-config-note" id="email-config-note">
+                    Missing: {{ smtp_status.missing_required|join(', ') }}
+                  </p>
+                  {% else %}
+                  <p class="dataset-purpose email-config-note" id="email-config-note">
+                    Weekly summaries and major crop-change alerts can now reach your inbox.
+                  </p>
+                  {% endif %}
+                </div>
+                <form id="advisory-email-form" class="advisory-form advisory-email-form">
+                  <label class="advisory-check">
+                    <input type="checkbox" name="email_alerts_enabled" value="1" {% if advisory_preferences.email_alerts_enabled %}checked{% endif %}>
+                    <span>Send email updates when important crop opportunities or risk alerts are generated.</span>
+                  </label>
+                  <div class="notification-actions">
+                    <button type="submit" class="button primary">Save email setting</button>
+                    <button type="button" id="send-advisory-email-now" class="button secondary">Send latest update now</button>
+                  </div>
+                </form>
+                <div id="advisory-email-feedback" class="dataset-status" aria-live="polite"></div>
+              </div>
+            </div>
+
+            <div class="advisory-settings-card advisory-benefit-card">
+              <div class="guide-pill">How this helps</div>
+              <ul class="advisory-benefit-list">
+                <li>Shows the best move first, without making the user read a report.</li>
+                <li>Keeps every alert inside just three clear states: opportunity, watch, or action needed.</li>
+                <li>Opens deeper reasoning only when the user taps for it.</li>
+                <li>Still runs the trigger engine and weekly checks quietly in the background.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+      #}
+
+      <section class="panel analytics-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Analytics</p>
+            <h2>Live model analytics and forecast patterns</h2>
+            <p class="dataset-purpose">These charts reflect the trained dataset, current crop context, and live prediction output together.</p>
+          </div>
+        </div>
+        <div id="chart-context-banner" class="chart-context-banner">
+          Last predicted for: no live prediction yet. The charts below will react to your latest input.
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div id="yield-chart-container">{{ figures.yield_by_crop|safe }}</div>
+          </div>
+          <div class="chart-card">
+            <div id="risk-chart-container">{{ figures.risk_distribution|safe }}</div>
+          </div>
+          <div class="chart-card full">
+            <div id="trend-chart-container">{{ figures.trend|safe }}</div>
+          </div>
+        </div>
+      </section>
+
+        <section class="panel dataset-preview-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="dataset_preview">Dataset Preview</p>
+              <h2 data-i18n="example_records">Example records used for training</h2>
+              <p class="dataset-purpose">These records are used to train the prediction model and improve accuracy.</p>
+            </div>
+          </div>
+          <details class="collapsible-panel is-soft dataset-manager-panel">
+            <summary>
+              <div>
+                <p class="eyebrow">Dataset Controls</p>
+                <h3>Upload or switch training CSV</h3>
+              </div>
+            </summary>
+            <div class="dataset-manager-grid">
+              <div class="dataset-manager-card">
+                <div class="guide-pill">Active dataset</div>
+                <p class="dataset-manager-title">{{ summary.dataset_name }}</p>
+                <p class="dataset-purpose">{{ summary.dataset_source }}</p>
+                <div class="dataset-manager-meta">
+                  <span>{{ summary.dataset_rows }} rows</span>
+                  <span>{{ summary.crop_count }} crops</span>
+                </div>
+              </div>
+              <form id="dataset-upload-form" class="dataset-upload-form">
+                <label class="dataset-upload-label">
+                  <span>Choose CSV file</span>
+                  <input id="dataset-file-input" name="dataset_file" type="file" accept=".csv,text/csv">
+                </label>
+                <div class="dataset-manager-actions">
+                  <button type="submit" class="button secondary">Upload Dataset</button>
+                  <button type="button" id="dataset-reset-button" class="button secondary">Reset to Demo Dataset</button>
+                </div>
+                <p class="dataset-purpose">Use this only when you want to retrain the backend models on a new CSV. The control stays hidden until you open it.</p>
+                <div id="dataset-status" class="dataset-status" aria-live="polite"></div>
+              </form>
+            </div>
+          </details>
+          <details class="collapsible-panel is-soft dataset-disclosure" open>
+            <summary>
+              <div>
+                <p class="eyebrow">Training Data Snapshot</p>
+                <h3>View sample dataset records</h3>
+            </div>
+          </summary>
+          <div class="table-wrap compact-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Crop</th>
+              <th>Region</th>
+              <th>Soil</th>
+              <th>Rainfall</th>
+              <th>Temp</th>
+              <th>Humidity</th>
+              <th>Yield</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in latest_rows %}
+            <tr>
+              <td>{{ row.crop_type }}</td>
+              <td>{{ row.region }}</td>
+              <td>{{ row.soil_type }}</td>
+              <td>{{ row.rainfall_mm }}</td>
+              <td>{{ row.temperature_c }}</td>
+              <td>{{ row.humidity_pct }}</td>
+              <td>{{ row.yield_ton_per_hectare }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        </details>
+      </section>
+
+    <footer class="site-footer">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <h3>Crop Yield Prediction System</h3>
+          <p>AI-powered crop planning support with prediction, risk analysis, recommendation, and visual analytics.</p>
+          <a class="footer-button" href="{{ url_for('contact') }}">Contact Details</a>
+        </div>
+        <div class="footer-column">
+          <h4>Quick Links</h4>
+          <a href="#predictor">Live Predictor</a>
+          <a href="#yield-chart-container">Analytics</a>
+          <a href="#history">Prediction History</a>
+        </div>
+        <div class="footer-column">
+          <h4>Resources</h4>
+          <a href="{{ url_for('about') }}">About Project</a>
+          <a href="{{ url_for('model_overview') }}">Model Overview</a>
+          <a href="{{ url_for('risk_scoring') }}">Risk Scoring</a>
+          <a href="{{ url_for('dataset_notes') }}">Dataset Notes</a>
+        </div>
+        <div class="footer-column">
+          <h4>Support</h4>
+          <a href="{{ url_for('faq') }}">FAQ</a>
+          <a href="{{ url_for('privacy') }}">Privacy Policy</a>
+          <a href="{{ url_for('terms') }}">Terms of Use</a>
+          <a href="{{ url_for('help_center') }}">Help Center</a>
+        </div>
+        <div class="footer-column institution-column">
+          <h4>Institution</h4>
+          <p>MIET, Jammu</p>
+          <p>B.Tech in CSE</p>
+          <p>Project Team from Jammu, J&K</p>
+        </div>
+      </div>
+    </footer>
+
+    <button type="button" id="assistant-fab" class="assistant-fab" aria-label="Open quick tools">
+      Quick Tools
+    </button>
+
+    <div id="assistant-chatbot" class="assistant-chatbot">
+      <div class="assistant-chatbot-card">
+        <div class="assistant-chatbot-header">
+          <div>
+            <p class="eyebrow">Quick Tools</p>
+            <h3>Fast actions for the user</h3>
+            <p>Open the most useful actions first, then apply current field conditions in one tap if needed.</p>
+          </div>
+          <button type="button" id="assistant-close" class="assistant-close" aria-label="Close assistant">x</button>
+        </div>
+        <div class="assistant-shortcuts action-grid">
+          <button type="button" id="quick-open-advisory" class="button secondary">Open Advisories</button>
+          <button type="button" id="quick-open-history" class="button secondary">View History</button>
+          <button type="button" id="quick-open-dataset" class="button secondary">Dataset Controls</button>
+          <button type="button" id="quick-open-contact" class="button secondary">Contact Team</button>
+        </div>
+        <div class="input-tip">Current-condition helper</div>
+        <div class="assistant-grid">
+          <label>
+            <span>Rainfall today</span>
+            <select id="assistant-rain">
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label>
+            <span>Pest issue</span>
+            <select id="assistant-pest">
+              <option value="low">No major issue</option>
+              <option value="medium">Some signs</option>
+              <option value="high">Strong issue</option>
+            </select>
+          </label>
+          <label>
+            <span>Soil if known</span>
+            <select id="assistant-soil">
+              <option value="">Use dataset default</option>
+              {% for soil in options.soil_types %}
+              <option value="{{ soil }}">{{ soil }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Fertilizer condition</span>
+            <select id="assistant-fertilizer">
+              <option value="medium">Balanced</option>
+              <option value="low">Needs support</option>
+              <option value="high">Well managed</option>
+            </select>
+          </label>
+        </div>
+        <div class="assistant-actions">
+          <button type="button" id="apply-assistant" class="button primary">Apply Current Conditions</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="model-guide-drawer" class="model-guide-drawer" aria-hidden="true">
+      <div class="model-guide-drawer-backdrop"></div>
+      <aside class="model-guide-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="model-guide-drawer-title">
+        <div class="model-guide-drawer-head">
+          <div>
+            <p class="eyebrow">Model Guide</p>
+            <h3 id="model-guide-drawer-title">When To Use Which Model</h3>
+            <p class="dataset-purpose">A practical explanation of how each model helps the prediction workflow.</p>
+          </div>
+          <button type="button" id="model-guide-close" class="assistant-close" aria-label="Close model guide">x</button>
+        </div>
+        <div class="model-guide-drawer-body">
+          <div class="model-guide-tabs">
+            <button type="button" class="model-guide-tab is-active" data-guide-tab="overview">Overview</button>
+            <button type="button" class="model-guide-tab" data-guide-tab="workflow">Workflow</button>
+            <button type="button" class="model-guide-tab" data-guide-tab="models">Models</button>
+            <button type="button" class="model-guide-tab" data-guide-tab="risk">Risk Engine</button>
+          </div>
+
+          <section class="model-guide-panel-view is-active" data-guide-panel="overview">
+            <div class="model-guide-overview-grid">
+              <div class="model-guide-callout">
+                <div class="model-hero-strip">
+                  <div class="model-hero-stat">
+                    <span>Live model</span>
+                    <strong>{{ summary.best_model }}</strong>
+                  </div>
+                  <div class="model-hero-stat">
+                    <span>Validation R2</span>
+                    <strong>{{ summary.best_r2 }}</strong>
+                  </div>
+                  <div class="model-hero-stat">
+                    <span>Dataset rows</span>
+                    <strong>{{ summary.dataset_rows }}</strong>
+                  </div>
+                </div>
+                <div class="guide-stack">
+                  <article class="guide-summary-card">
+                    <div class="guide-pill">Prediction Models</div>
+                    <p>The regression models compete for live yield forecasting, and the strongest validation performer is selected automatically.</p>
+                  </article>
+                  <article class="guide-summary-card">
+                    <div class="guide-pill secondary">What matters most</div>
+                    <p>The live model is chosen for the strongest balance of accuracy, stability, and lower prediction error on this dataset.</p>
+                  </article>
+                </div>
+              </div>
+              <div class="model-guide-highlight">
+                <div class="section-mini-heading">
+                  <h3>Why {{ summary.best_model }} leads right now</h3>
+                  <p>This is the fastest summary view for someone who wants the answer before the technical detail.</p>
+                </div>
+                <div class="model-guide-highlight-grid">
+                  <article class="guide-focus-card">
+                    <span class="guide-focus-label">Selection logic</span>
+                    <strong>Best validation balance</strong>
+                    <p>{{ comparison_insight }}</p>
+                  </article>
+                  <article class="guide-focus-card">
+                    <span class="guide-focus-label">Metric meaning</span>
+                    <strong>Higher R2, lower RMSE and MAE</strong>
+                    <p>{{ metric_meaning }}</p>
+                  </article>
+                  {% if ga_ann_improvement %}
+                  <article class="guide-focus-card is-compact">
+                    <span class="guide-focus-label">GA + ANN gain</span>
+                    <strong>{{ ga_ann_improvement.rmse_gain_pct }}% lower RMSE</strong>
+                    <p>Baseline RMSE {{ ga_ann_improvement.baseline_rmse }} to optimized RMSE {{ ga_ann_improvement.optimized_rmse }}.</p>
+                  </article>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="model-guide-panel-view" data-guide-panel="workflow">
+            <div class="workflow-guide-grid">
+              <div class="workflow-step-rail">
+                <button type="button" class="workflow-step is-input is-active" data-workflow-step="input">
+                  <span class="workflow-step-number">01</span>
+                  <strong>User Input</strong>
+                  <p>Field, climate, and soil values enter the prediction flow.</p>
+                </button>
+                <button type="button" class="workflow-step" data-workflow-step="prep">
+                  <span class="workflow-step-number">02</span>
+                  <strong>Data Preprocessing</strong>
+                  <p>Inputs are cleaned, aligned, and prepared for model use.</p>
+                </button>
+                <button type="button" class="workflow-step" data-workflow-step="compare">
+                  <span class="workflow-step-number">03</span>
+                  <strong>Model Comparison</strong>
+                  <p>Regression models compete on validation metrics.</p>
+                </button>
+                <button type="button" class="workflow-step is-best" data-workflow-step="select">
+                  <span class="workflow-step-number">04</span>
+                  <strong>Best Model Selection</strong>
+                  <p>The strongest performer becomes the live prediction engine.</p>
+                </button>
+                <button type="button" class="workflow-step" data-workflow-step="yield">
+                  <span class="workflow-step-number">05</span>
+                  <strong>Yield Prediction</strong>
+                  <p>The selected model estimates expected crop yield.</p>
+                </button>
+                <button type="button" class="workflow-step is-risk" data-workflow-step="risk">
+                  <span class="workflow-step-number">06</span>
+                  <strong>Fuzzy Risk Evaluation</strong>
+                  <p>Risk logic converts stress factors into a human-readable field reading.</p>
+                </button>
+              </div>
+              <div class="workflow-detail-card">
+                <div class="guide-pill" id="workflow-detail-pill">Step 01</div>
+                <h3 id="workflow-detail-title">User Input</h3>
+                <p id="workflow-detail-copy">Field, climate, and soil values enter the prediction flow so the system can understand real field conditions before choosing the best prediction path.</p>
+                <div class="workflow-detail-points">
+                  <article>
+                    <span class="workflow-detail-label">Why it matters</span>
+                    <p id="workflow-detail-why">Reliable crop decisions start with the right rainfall, soil, nutrient, and pest signals.</p>
+                  </article>
+                  <article>
+                    <span class="workflow-detail-label">What happens next</span>
+                    <p id="workflow-detail-next">The system standardizes this input, evaluates candidate models, and prepares the live prediction engine.</p>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="model-guide-panel-view" data-guide-panel="models">
+            <div class="model-guide-models-stack">
+              <div class="model-selected-hero">
+                <div>
+                  <p class="eyebrow">Selected Live Model</p>
+                  <h3>{{ summary.best_model }}</h3>
+                  <p>{{ comparison_insight }}</p>
+                </div>
+                <div class="model-selected-metrics">
+                  <span>R2 {{ summary.best_r2 }}</span>
+                  <span>RMSE {{ summary.best_rmse }}</span>
+                  <span>MAE {{ summary.best_mae }}</span>
+                </div>
+              </div>
+              <div class="model-use-table">
+                <div class="model-use-row model-use-head">
+                  <strong>Model</strong>
+                  <strong>Best Use Case</strong>
+                </div>
+                {% for result in model_results %}
+                <div class="model-use-row{% if result.name == summary.best_model %} is-selected{% endif %}">
+                  <span>{{ result.name }}</span>
+                  <span>{{ model_use_cases[result.name] }}</span>
+                </div>
+                {% endfor %}
+                <div class="model-use-row">
+                  <span>{{ fuzzy_engine.name }}</span>
+                  <span>{{ model_use_cases[fuzzy_engine.name] }}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="model-guide-panel-view" data-guide-panel="risk">
+            <div class="risk-guide-layout">
+              <div class="risk-guide-hero">
+                <div class="guide-pill secondary">Risk Engine</div>
+                <h3>{{ fuzzy_engine.name }}</h3>
+                <p>{{ fuzzy_engine.role }}</p>
+              </div>
+              <div class="risk-guide-grid">
+                <article class="guide-summary-card">
+                  <div class="guide-pill secondary">Why separate?</div>
+                  <p>{{ fuzzy_engine.reason }}</p>
+                </article>
+                <article class="guide-summary-card">
+                  <div class="guide-pill">What it reads</div>
+                  <p>Rainfall, temperature, soil condition, and pest stress are translated into a simpler Low / Moderate / High field reading.</p>
+                </article>
+                <article class="guide-summary-card">
+                  <div class="guide-pill">User value</div>
+                  <p>It helps users understand whether a strong yield prediction is also safe and practical under the current field conditions.</p>
+                </article>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+
+    <div id="info-modal" class="info-modal" aria-hidden="true">
+      <div class="info-modal-card">
+        <button type="button" id="info-modal-close" class="assistant-close" aria-label="Close help dialog">x</button>
+        <p id="info-modal-eyebrow" class="eyebrow">Guide</p>
+        <h3 id="info-modal-title">Details</h3>
+        <div id="info-modal-body" class="info-modal-body"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    window.cropAppDefaults = {
+      crop_type: "Rice",
+      region: "South",
+      soil_type: "Loamy",
+      rainfall_mm: 1100,
+      temperature_c: 28,
+      humidity_pct: 80,
+      soil_ph: 6.2,
+      nitrogen_kg_ha: 105,
+      phosphorus_kg_ha: 58,
+      potassium_kg_ha: 72,
+      pest_risk: 2.8
+    };
+    window.simpleProfiles = {{ simple_profiles|tojson }};
+    window.locationProfiles = {{ location_profiles|tojson }};
+    window.seasonProfiles = {{ season_profiles|tojson }};
+    window.initialAdvisoryState = {{ {
+      "notifications": advisory_notifications,
+      "preferences": advisory_preferences,
+      "unread_count": advisory_unread_count,
+      "smtp_ready": smtp_ready,
+      "smtp_status": smtp_status,
+      "priority_popup": advisory_popup,
+      "engine_state": advisory_engine_state,
+      "main_recommendation": primary_recommendation
+    }|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

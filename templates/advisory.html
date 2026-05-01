@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crop Advisory Center</title>
+  <meta
+    name="description"
+    content="A focused crop advisory center for smart alerts, user preferences, and action-first crop guidance."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="floating-user-menu">
+    <button type="button" id="user-menu-toggle" class="floating-user-toggle" aria-label="Open user menu">
+      {{ current_user.full_name[:1] if current_user.full_name else 'U' }}
+    </button>
+    <div id="user-menu-dropdown" class="floating-user-dropdown">
+      <strong>{{ current_user.full_name }}</strong>
+      <span class="floating-user-email">{{ current_user.email }}</span>
+      <a href="{{ url_for('index') }}#predictor">Back to Predictor</a>
+      <a href="{{ url_for('advisory_center') }}">Crop Advisory Center</a>
+      <a href="{{ url_for('index') }}#history">Prediction History</a>
+      <a href="{{ url_for('logout') }}" data-i18n="logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">AI Farming Assistant</p>
+        <h1>Crop Advisory Center</h1>
+      </div>
+      <div class="header-actions">
+        <div class="header-utility-cluster">
+          <button type="button" id="advisory-toggle" class="header-utility-button" aria-label="Open crop advisories">
+            <span class="header-utility-icon">Alerts</span>
+            <span>Crop Advisory</span>
+            <span id="advisory-badge" class="notification-badge{% if not advisory_unread_count %} is-hidden{% endif %}">{{ advisory_unread_count or 0 }}</span>
+          </button>
+          <div id="advisory-popover" class="advisory-popover">
+            <div class="advisory-popover-head">
+              <div>
+                <p class="eyebrow">Advisory Feed</p>
+                <h3>Latest crop signals</h3>
+              </div>
+              <a href="{{ url_for('advisory_center') }}" class="mini-link">Open center</a>
+            </div>
+            <div id="advisory-popover-list" class="advisory-popover-list">
+              {% for advisory in advisory_notifications[:2] %}
+              <article class="advisory-popover-item{% if not advisory.is_read %} is-unread{% endif %}">
+                <span class="notification-priority {{ advisory.priority }}">{{ advisory.priority_label }}</span>
+                <strong>{{ advisory.icon }} {{ advisory.compact_title }}</strong>
+                <p>👉 {{ advisory.compact_action }}</p>
+              </article>
+              {% else %}
+              <div class="history-empty">Your advisory feed will appear here after refresh.</div>
+              {% endfor %}
+            </div>
+            <div class="advisory-popover-actions">
+              <a
+                id="advisory-popover-more"
+                href="{{ url_for('advisory_center') }}"
+                class="mini-link{% if advisory_notifications|length <= 2 %} is-hidden{% endif %}"
+              >Show More</a>
+            </div>
+          </div>
+        </div>
+        <div class="header-controls">
+          <label class="header-control-group">
+            <span data-i18n="language">Language</span>
+            <select id="language-select" class="header-select">
+              <option value="en">English</option>
+              <option value="hi">हिंदी</option>
+              <option value="hinglish">Hinglish</option>
+            </select>
+          </label>
+          <label class="header-control-group">
+            <span data-i18n="theme">Theme</span>
+            <select id="theme-select" class="header-select">
+              <option value="light" data-i18n="light_mode">Light Mode</option>
+              <option value="dark" data-i18n="dark_mode">Dark Mode</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel advisory-intro-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Action First</p>
+          <h2>Open advisories only when you need them</h2>
+          <p class="dataset-purpose">This space stays focused on the best action, the few alerts that matter, and your alert preferences.</p>
+        </div>
+        <div class="notification-actions">
+          <a href="{{ url_for('index') }}#predictor" class="button secondary">Back to Predictor</a>
+          <button type="button" id="refresh-advisories" class="button primary">Refresh advisories</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="advisory-center" class="panel advisory-center-panel">
+      <div class="advisory-center-grid">
+        <div class="advisory-inbox-panel">
+          <div id="advisory-decision-hero" class="advisory-decision-hero">
+            <div class="decision-hero-topline">
+              <div class="guide-pill">🚀 Best Action Today</div>
+              <span class="decision-hero-tag">Action first</span>
+            </div>
+            <h3 id="decision-hero-title">🚀 {{ primary_recommendation.title }}</h3>
+            <p id="decision-hero-subtitle" class="dataset-purpose">👉 {{ primary_recommendation.reason }}</p>
+            <div id="decision-hero-metrics" class="decision-hero-metrics">
+              <span>📍 {{ primary_recommendation.region }}</span>
+              <span>📈 Yield {{ primary_recommendation.yield }} t/ha</span>
+              <span>⚠️ {{ primary_recommendation.risk_level }} risk</span>
+              <span>📊 {{ primary_recommendation.confidence_bar }}</span>
+            </div>
+            <div class="notification-actions">
+              <a href="{{ url_for('index') }}#predictor" id="decision-hero-details" class="button primary">View Why</a>
+              <a href="{{ url_for('index') }}#workflow-review" id="decision-hero-compare" class="button secondary">Compare Crops</a>
+            </div>
+          </div>
+
+          <div class="advisory-panel-head">
+            <div>
+              <p class="eyebrow">Quick Alerts</p>
+              <h3>Only the top changes</h3>
+            </div>
+            <span id="advisory-status-pill" class="guide-pill secondary">Auto monitoring active</span>
+          </div>
+          <div class="advisory-filter-row compact">
+            <label>
+              <span>Category</span>
+              <select id="advisory-category-filter">
+                <option value="all">All</option>
+                <option value="opportunity">Opportunity</option>
+                <option value="risk">Risk</option>
+                <option value="watch">Watch</option>
+              </select>
+            </label>
+            <label>
+              <span>Priority</span>
+              <select id="advisory-severity-filter">
+                <option value="all">All</option>
+                <option value="critical">Action Needed</option>
+                <option value="important">Watch</option>
+                <option value="info">Opportunity</option>
+              </select>
+            </label>
+          </div>
+          <div id="notification-list" class="notification-list">
+            {% for advisory in advisory_notifications[:3] %}
+            <article class="notification-card compact {{ advisory.ui_tone }} {{ advisory.priority }}{% if not advisory.is_read %} is-unread{% endif %}" data-notification-id="{{ advisory.id }}">
+              <div class="notification-card-head">
+                <span class="notification-priority {{ advisory.priority }}">{{ advisory.priority_label }}</span>
+                <span class="notification-time">{{ advisory.region_label }}</span>
+              </div>
+              <h4>{{ advisory.icon }} {{ advisory.compact_title }}</h4>
+              <p>👉 {{ advisory.compact_action }}</p>
+              <div class="notification-actions">
+                {% if advisory.cta_href %}
+                <a href="{{ advisory.cta_href }}" class="button secondary">Compare Crops</a>
+                {% endif %}
+                <button type="button" class="button secondary notification-expand-button" data-notification-expand="{{ advisory.id }}" aria-expanded="false">View details</button>
+                {% if not advisory.is_read %}
+                <button type="button" class="button secondary notification-read-button" data-notification-read="{{ advisory.id }}">Mark done</button>
+                {% endif %}
+              </div>
+              <div class="notification-detail is-hidden" data-notification-detail="{{ advisory.id }}">
+                <p><strong>Reason:</strong> {{ advisory.message }}</p>
+                {% if advisory.best_yield or advisory.watch_risk is not none or advisory.confidence_score %}
+                <div class="notification-meta-grid">
+                  {% if advisory.best_yield %}
+                  <span>📈 Yield: {{ advisory.best_yield }} t/ha</span>
+                  {% endif %}
+                  {% if advisory.watch_risk is not none %}
+                  <span>⚠️ Risk: {{ advisory.watch_risk }}</span>
+                  {% endif %}
+                  {% if advisory.confidence_score %}
+                  <span>📊 Confidence: {{ advisory.confidence_bar }}</span>
+                  {% endif %}
+                  {% if advisory.expected_impact_pct %}
+                  <span>📈 Impact: {{ advisory.expected_impact_pct }}%</span>
+                  {% endif %}
+                </div>
+                {% endif %}
+                <div class="notification-recommendation"><strong>Recommendation:</strong> {{ advisory.recommendation or advisory.compact_action }}</div>
+                {% if advisory.action_items %}
+                <ul class="notification-action-list">
+                  {% for item in advisory.action_items %}
+                  <li>{{ item }}</li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+              </div>
+            </article>
+            {% else %}
+            <div class="history-empty">No advisories yet. Use refresh to generate the first advisory set from your current data.</div>
+            {% endfor %}
+          </div>
+          <div class="notification-actions show-more-row">
+            <button type="button" id="toggle-alerts-view" class="button secondary{% if advisory_notifications|length <= 3 %} is-hidden{% endif %}">Show More</button>
+          </div>
+        </div>
+
+        <div class="advisory-settings-panel">
+          <div class="advisory-settings-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Preferences</p>
+                <h3>Choose what matters most</h3>
+              </div>
+            </div>
+            <form id="advisory-preferences-form" class="advisory-form">
+              <label>
+                <span>Favorite Crop</span>
+                <select name="favorite_crop">
+                  {% for crop in options.crop_types %}
+                  <option value="{{ crop }}" {% if advisory_preferences.favorite_crop == crop %}selected{% endif %}>{{ crop }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>
+                <span>Preferred Region</span>
+                <select name="preferred_region">
+                  {% for region in options.regions %}
+                  <option value="{{ region }}" {% if advisory_preferences.preferred_region == region %}selected{% endif %}>{{ region }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>
+                <span>Preferred Season</span>
+                <select name="preferred_season">
+                  {% for season in ['Kharif', 'Rabi', 'Zaid'] %}
+                  <option value="{{ season }}" {% if advisory_preferences.preferred_season == season %}selected{% endif %}>{{ season }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>
+                <span>Alert Frequency</span>
+                <select name="alert_frequency">
+                  <option value="instant" {% if advisory_preferences.alert_frequency == 'instant' %}selected{% endif %}>Instant</option>
+                  <option value="daily" {% if advisory_preferences.alert_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                  <option value="weekly" {% if advisory_preferences.alert_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
+                </select>
+              </label>
+              <label class="advisory-check">
+                <input type="checkbox" name="in_app_alerts_enabled" value="1" {% if advisory_preferences.in_app_alerts_enabled %}checked{% endif %}>
+                <span>Show advisory alerts inside my dashboard.</span>
+              </label>
+              <div class="notification-actions">
+                <button type="submit" class="button primary">Save advisory preferences</button>
+              </div>
+            </form>
+            <div id="advisory-settings-feedback" class="dataset-status" aria-live="polite"></div>
+          </div>
+
+          <div class="advisory-settings-card advisory-benefit-card">
+            <div class="guide-pill">How this helps</div>
+            <ul class="advisory-benefit-list">
+              <li>Keeps the homepage focused on prediction instead of alerts.</li>
+              <li>Shows the best move first, then only a few non-duplicate alerts.</li>
+              <li>Lets users expand details only when they actually want them.</li>
+              <li>Preserves the background weekly and major-change notification engine.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    window.initialAdvisoryState = {{ {
+      "notifications": advisory_notifications,
+      "preferences": advisory_preferences,
+      "unread_count": advisory_unread_count,
+      "smtp_ready": smtp_ready,
+      "smtp_status": smtp_status,
+      "priority_popup": advisory_popup,
+      "engine_state": advisory_engine_state,
+      "main_recommendation": primary_recommendation
+    }|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page_title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <script>
+    if (localStorage.getItem("cropAppTheme") === "dark") {
+      document.body.classList.add("dark-mode");
+    }
+  </script>
+  <div class="page-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">{{ page_eyebrow }}</p>
+        <h1>{{ page_title }}</h1>
+      </div>
+      <div class="header-actions">
+        <a class="button secondary" href="{{ url_for('index') }}">Back to Website</a>
+      </div>
+    </header>
+
+    <section class="panel info-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ page_eyebrow }}</p>
+          <h2>{{ page_heading }}</h2>
+        </div>
+      </div>
+      <div class="info-grid support-grid">
+        {% for section in sections %}
+        <article class="info-card {% if section.faq_items %}faq-card{% endif %}">
+          <h3>{{ section.title }}</h3>
+
+          {% if section.paragraphs %}
+            {% for paragraph in section.paragraphs %}
+            <p>{{ paragraph }}</p>
+            {% endfor %}
+          {% endif %}
+
+          {% if section.bullet_points %}
+          <ul class="info-list">
+            {% for item in section.bullet_points %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          {% if section.faq_items %}
+            {% for item in section.faq_items %}
+            <details {% if loop.first %}open{% endif %}>
+              <summary>{{ item.question }}</summary>
+              <p>{{ item.answer }}</p>
+            </details>
+            {% endfor %}
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</body>
+</html>

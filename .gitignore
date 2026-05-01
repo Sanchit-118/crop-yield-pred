@@ -1,0 +1,11 @@
+.venv/
+.packages/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+data/users.db
+data/custom_crop_yield_dataset.csv
+project_package/
+*.zip
