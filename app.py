@@ -84,6 +84,10 @@ DEFAULT_DB_BACKEND = (
     else "sqlite"
 )
 ACTIVE_DB_BACKEND = DEFAULT_DB_BACKEND
+MODEL_EVAL_PROFILE = os.getenv("MODEL_EVAL_PROFILE", "auto").strip().lower()
+LIGHTWEIGHT_MODEL_EVAL = MODEL_EVAL_PROFILE == "light" or (
+    MODEL_EVAL_PROFILE == "auto" and IS_RENDER
+)
 FEATURE_COLUMNS = [
     "crop_type",
     "region",
@@ -101,6 +105,17 @@ CATEGORICAL_COLUMNS = ["crop_type", "region", "soil_type"]
 NUMERICAL_COLUMNS = [column for column in FEATURE_COLUMNS if column not in CATEGORICAL_COLUMNS]
 MAX_VISIBLE_ALERTS = 4
 MEANINGFUL_ALERT_TYPES = {"best_crop_changed", "yield_improvement", "risk_increase", "season_shift"}
+
+MODEL_EVAL_SETTINGS = {
+    "baseline_ann_max_iter": 240 if LIGHTWEIGHT_MODEL_EVAL else 900,
+    "ga_ann_max_iter": 240 if LIGHTWEIGHT_MODEL_EVAL else 900,
+    "ga_search_iterations": 2 if LIGHTWEIGHT_MODEL_EVAL else 5,
+    "ga_search_cv": 2 if LIGHTWEIGHT_MODEL_EVAL else 3,
+    "rf_estimators": 72 if LIGHTWEIGHT_MODEL_EVAL else 220,
+    "rf_max_depth": 8 if LIGHTWEIGHT_MODEL_EVAL else 12,
+    "gb_estimators": 120 if LIGHTWEIGHT_MODEL_EVAL else 240,
+    "gb_learning_rate": 0.06 if LIGHTWEIGHT_MODEL_EVAL else 0.05,
+}
 
 RISK_WEIGHTS = {
     "rainfall_deviation": 0.30,
@@ -2107,13 +2122,14 @@ def build_preprocessor() -> ColumnTransformer:
 def build_ga_optimized_ann(
     x_train: pd.DataFrame, y_train: pd.Series
 ) -> Pipeline:
+    settings = MODEL_EVAL_SETTINGS
     pipeline = Pipeline(
         steps=[
             ("preprocessor", build_preprocessor()),
             (
                 "model",
                 MLPRegressor(
-                    max_iter=900,
+                    max_iter=settings["ga_ann_max_iter"],
                     random_state=42,
                     early_stopping=True,
                 ),
@@ -2127,8 +2143,8 @@ def build_ga_optimized_ann(
             "model__learning_rate_init": [0.001, 0.003, 0.01],
             "model__alpha": [0.0001, 0.001, 0.01],
         },
-        n_iter=5,
-        cv=3,
+        n_iter=settings["ga_search_iterations"],
+        cv=settings["ga_search_cv"],
         random_state=42,
         scoring="r2",
         n_jobs=1,
@@ -2140,6 +2156,7 @@ def build_ga_optimized_ann(
 
 
 def evaluate_models(dataframe: pd.DataFrame) -> dict[str, object]:
+    settings = MODEL_EVAL_SETTINGS
     x = dataframe[FEATURE_COLUMNS]
     y = dataframe["yield_ton_per_hectare"]
 
@@ -2154,7 +2171,7 @@ def evaluate_models(dataframe: pd.DataFrame) -> dict[str, object]:
                 "model",
                 MLPRegressor(
                     hidden_layer_sizes=(64, 32),
-                    max_iter=900,
+                    max_iter=settings["baseline_ann_max_iter"],
                     random_state=42,
                     early_stopping=True,
                 ),
@@ -2187,7 +2204,15 @@ def evaluate_models(dataframe: pd.DataFrame) -> dict[str, object]:
             Pipeline(
                 steps=[
                     ("preprocessor", build_preprocessor()),
-                    ("model", RandomForestRegressor(n_estimators=220, random_state=42, max_depth=12)),
+                    (
+                        "model",
+                        RandomForestRegressor(
+                            n_estimators=settings["rf_estimators"],
+                            random_state=42,
+                            max_depth=settings["rf_max_depth"],
+                            n_jobs=1,
+                        ),
+                    ),
                 ]
             ),
         ),
@@ -2196,7 +2221,15 @@ def evaluate_models(dataframe: pd.DataFrame) -> dict[str, object]:
             Pipeline(
                 steps=[
                     ("preprocessor", build_preprocessor()),
-                    ("model", GradientBoostingRegressor(n_estimators=240, learning_rate=0.05, max_depth=3, random_state=42)),
+                    (
+                        "model",
+                        GradientBoostingRegressor(
+                            n_estimators=settings["gb_estimators"],
+                            learning_rate=settings["gb_learning_rate"],
+                            max_depth=3,
+                            random_state=42,
+                        ),
+                    ),
                 ]
             ),
         ),
